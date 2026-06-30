@@ -1,0 +1,15 @@
+[
+  {
+    "expression": "div(sub(main_net, main_net_ma5), main_net_std5)",
+    "ic": 0.045,
+    "ic_windows": [
+      0.04,
+      0.05,
+      0.04
+    ],
+    "ic_mean": 0.043,
+    "ic_stability": 0.01,
+    "discovery_date": "2026-06-30",
+    "length": 6
+  }
+]
