@@ -191,6 +191,73 @@ def fetch_daily_kline_baidu(code, start_time=""):
     return pd.DataFrame(rows)
 
 
+def fetch_tick_data(code):
+    """Fetch daily tick-by-tick transaction data from 迈锐API.
+
+    Each tick: {d: date, t: time(HH:mm:ss), v: volume(shares), p: price, ts: direction}
+    ts: 0=neutral, 1=buy, 2=sell. Returns list of dicts.
+    Free licence required from https://www.mairuiapi.com/getlicence.
+    """
+    licence = "7DFC8EA6-8F7A-4765-B37D-356EA3F58829"
+    url = f"http://api.mairuiapi.com/hsrl/zbjy/{code}/{licence}"
+    try:
+        r = requests.get(url, timeout=30)
+        if r.status_code != 200:
+            print(f"[WARN] Tick API returned {r.status_code} for {code}")
+            return []
+        data = r.json()
+        if isinstance(data, list) and len(data) > 0 and "d" in data[0]:
+            return data
+        return []
+    except Exception as e:
+        print(f"[WARN] Tick fetch failed for {code}: {e}")
+        return []
+
+
+def fetch_minute_kline_eastmoney(code, klt=5, limit=2000):
+    """Fetch historical minute K-line from eastmoney push2his.
+
+    Args:
+        code: 6-digit stock code
+        klt: bar size — 5=5min, 15=15min, 30=30min, 60=60min
+        limit: max bars to return (API caps at ~1533 for 5min)
+
+    Returns DataFrame with columns: time, open, close, high, low, volume, amount.
+    5-min historical data goes back ~32 trading days.
+    """
+    market_code = 1 if code.startswith("6") else 0
+    secid = f"{market_code}.{code}"
+    url = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
+    params = {
+        "secid": secid, "klt": str(klt), "fqt": "1",
+        "lmt": str(limit), "end": "20500101",
+        "fields1": "f1,f2,f3,f4,f5,f6",
+        "fields2": "f51,f52,f53,f54,f55,f56,f57",
+    }
+    headers = {"User-Agent": UA, "Referer": "https://quote.eastmoney.com/"}
+    try:
+        r = em_get(url, params=params, headers=headers, timeout=20)
+        d = r.json()
+    except Exception as e:
+        print(f"[WARN] Minute K-line failed for {code}: {e}")
+        return pd.DataFrame()
+
+    rows = []
+    for line in d.get("data", {}).get("klines", []):
+        parts = line.split(",")
+        if len(parts) >= 7:
+            rows.append({
+                "time": parts[0],
+                "open": float(parts[1]),
+                "close": float(parts[2]),
+                "high": float(parts[3]),
+                "low": float(parts[4]),
+                "volume": float(parts[5]),
+                "amount": float(parts[6]),
+            })
+    return pd.DataFrame(rows)
+
+
 # ── Self-check ──────────────────────────────────────────────
 if __name__ == "__main__":
     code = STOCK_POOL[0]  # 绿的谐波

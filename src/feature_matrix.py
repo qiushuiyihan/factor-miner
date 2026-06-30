@@ -2,7 +2,9 @@
 
 import numpy as np
 import pandas as pd
-from fetch_data import fetch_daily_fundflow, fetch_minute_fundflow, fetch_daily_kline_baidu, STOCK_POOL
+from fetch_data import (fetch_daily_fundflow, fetch_minute_fundflow,
+                        fetch_daily_kline_baidu, fetch_tick_data,
+                        fetch_minute_kline_eastmoney, STOCK_POOL)
 
 
 def build_daily_matrix(codes=None, lookback_days=60):
@@ -263,6 +265,102 @@ def build_enriched_matrix(codes=None, daily_lookback=60, intraday_lookback=10):
 
     print(f"      Enriched matrix: {enriched.shape[0]} rows × {enriched.shape[1]} cols ({has_intra} rows with intraday data)")
     return enriched
+
+
+def build_tick_features(codes=None):
+    """Extract features from tick-by-tick transaction data.
+
+    Per stock, computes:
+      - buy_sell_imbalance: (buy_vol - sell_vol) / total_vol
+      - avg_trade_size: mean volume per tick
+      - large_trade_ratio: fraction of trades with vol > 90th percentile
+      - block_trade_count: number of >50k share trades
+      - tick_arrival_rate: total ticks / trading minutes
+      - vwap_deviation: (close - vwap) / vwap
+      - buy_aggression: mean price of buy ticks / mean price of sell ticks
+
+    Args:
+        codes: stock list, defaults to STOCK_POOL
+
+    Returns:
+        pd.DataFrame with columns: date, code, <tick features>
+    """
+    if codes is None:
+        codes = STOCK_POOL
+
+    rows = []
+    for code in codes:
+        ticks = fetch_tick_data(code)
+        if not ticks:
+            print(f"[WARN] No tick data for {code}")
+            continue
+
+        df = pd.DataFrame(ticks)
+        df["v"] = df["v"].astype(float)
+        df["p"] = df["p"].astype(float)
+        df["ts"] = df["ts"].astype(int)
+
+        total_vol = df["v"].sum()
+        buy_vol = df[df["ts"] == 1]["v"].sum()
+        sell_vol = df[df["ts"] == 2]["v"].sum()
+
+        # Buy/sell imbalance
+        imbalance = (buy_vol - sell_vol) / (total_vol + 1)
+
+        # Average trade size
+        avg_size = df["v"].mean()
+
+        # Large trade ratio (top 10% by volume)
+        threshold = df["v"].quantile(0.9)
+        large_ratio = (df["v"] > threshold).mean()
+
+        # Block trades (>50k shares)
+        block_count = (df["v"] > 50000).sum()
+
+        # VWAP
+        vwap = (df["p"] * df["v"]).sum() / (total_vol + 1)
+        close_price = df["p"].iloc[-1]
+        vwap_dev = (close_price - vwap) / (vwap + 1e-10)
+
+        # Buy aggression: are buy orders at higher prices?
+        buy_prices = df[df["ts"] == 1]["p"]
+        sell_prices = df[df["ts"] == 2]["p"]
+        buy_agg = buy_prices.mean() / (sell_prices.mean() + 1e-10) if len(buy_prices) and len(sell_prices) else 1.0
+
+        # Tick arrival rate (ticks per minute)
+        if "t" in df.columns:
+            times = pd.to_datetime(df["d"] + " " + df["t"])
+            trading_minutes = (times.max() - times.min()).total_seconds() / 60
+            arrival_rate = len(df) / (trading_minutes + 1)
+        else:
+            arrival_rate = 0
+
+        # Volume distribution skew (high vol at high prices = bullish)
+        vol_weighted_price_skew = (
+            (df["p"] - df["p"].mean()) * df["v"]
+        ).sum() / (total_vol * df["p"].std() + 1e-10)
+
+        date_str = df["d"].iloc[0] if "d" in df.columns else str(pd.Timestamp.now().date())
+
+        rows.append({
+            "date": pd.Timestamp(date_str),
+            "code": code,
+            "tick_imbalance": imbalance,
+            "tick_avg_size": avg_size,
+            "tick_large_ratio": large_ratio,
+            "tick_block_count": block_count,
+            "tick_vwap_dev": vwap_dev,
+            "tick_buy_agg": buy_agg,
+            "tick_arrival_rate": arrival_rate,
+            "tick_vol_skew": vol_weighted_price_skew,
+            "tick_total_vol": total_vol,
+            "tick_close": close_price,
+        })
+
+    if not rows:
+        return pd.DataFrame()
+    result = pd.DataFrame(rows)
+    return result.sort_values(["code", "date"]).reset_index(drop=True)
 
 
 # ── Self-check ──────────────────────────────────────────────

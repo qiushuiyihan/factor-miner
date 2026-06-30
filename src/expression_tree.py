@@ -35,6 +35,11 @@ FEATURE_COLUMNS = {
         "main_net_accel", "large_net_accel", "mid_net_accel",
         "small_net_accel", "super_net_accel",
     ],
+    "TICK": [    # tick-level features (from 迈锐逐笔成交)
+        "tick_imbalance", "tick_avg_size", "tick_large_ratio",
+        "tick_block_count", "tick_vwap_dev", "tick_buy_agg",
+        "tick_arrival_rate", "tick_vol_skew", "tick_total_vol",
+    ],
     "INTRA": [   # intraday flow pattern features (from minute data)
         "intra_morning_main", "intra_afternoon_main",
         "intra_tail_main", "intra_open_main",
@@ -221,6 +226,24 @@ def generate_expressions(feature_columns, n=200, seed=42):
         for col in price_cols:
             templates.append((1, lambda c=col: f"zscore({c})"))
             templates.append((1, lambda c=col: f"rank({c})"))
+
+    # Type G: tick-level feature combinations
+    tick_cols = feature_columns.get("TICK", [])
+    if tick_cols:
+        # Buy/sell imbalance + fund flow
+        templates.append((5, lambda: "mul(tick_imbalance, zscore(main_net))"))
+        templates.append((5, lambda: "div(tick_imbalance, add(abs(tick_vwap_dev), 1e-10))"))
+        templates.append((4, lambda: "mul(tick_buy_agg, tick_large_ratio)"))
+        templates.append((4, lambda: "div(tick_block_count, add(abs(tick_arrival_rate), 1e-10))"))
+        templates.append((4, lambda: "mul(tick_vol_skew, rank(vol_ratio))"))
+        # Tick + daily flow cross
+        templates.append((4, lambda: "div(tick_imbalance, add(abs(main_net_lag1), 1e-10))"))
+        templates.append((3, lambda: "mul(tick_vwap_dev, zscore(main_net_accel))"))
+        templates.append((3, lambda: "div(tick_avg_size, add(abs(tick_total_vol), 1e-10))"))
+        # Single tick feature transforms
+        for col in tick_cols[:6]:  # top 6 most important
+            templates.append((2, lambda c=col: f"zscore({c})"))
+            templates.append((2, lambda c=col: f"rank({c})"))
 
     weights = [w for w, _ in templates]
     total = sum(weights)

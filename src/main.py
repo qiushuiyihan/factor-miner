@@ -15,7 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fetch_data import STOCK_POOL
-from feature_matrix import build_enriched_matrix, build_intraday_features
+from feature_matrix import build_enriched_matrix, build_intraday_features, build_tick_features
 from expression_tree import generate_expressions, FEATURE_COLUMNS, evaluate_expression, decode_expression
 from genetic_miner import run_evolution, spearman_ic
 from validator import three_layer_validate, deduplicate
@@ -35,9 +35,25 @@ def main():
     print(f"{'='*60}\n")
 
     # ── Step 1: Data ────────────────────────────────────────
-    print("[1/6] Fetching data (daily + intraday fund flow)...")
+    print("[1/6] Fetching data (daily + tick + intraday)...")
     try:
         data = build_enriched_matrix(codes, daily_lookback=60, intraday_lookback=10)
+
+        # Fetch tick features and merge into daily matrix
+        tick = build_tick_features(codes)
+        if not tick.empty:
+            tick_cols = [c for c in tick.columns if c not in ("date", "code")]
+            data = data.merge(tick[["date", "code"] + tick_cols],
+                              on=["date", "code"], how="left")
+            # Forward-fill tick features (latest tick snapshot applies to future rows)
+            data[tick_cols] = data.groupby("code")[tick_cols].ffill()
+            # Back-fill early rows without tick data
+            data[tick_cols] = data.groupby("code")[tick_cols].bfill()
+            has_tick = data[tick_cols[0]].notna().sum()
+            print(f"      Tick features: {len(tick)} stocks, {has_tick}/{len(data)} rows enriched")
+        else:
+            print("      Tick features: unavailable")
+
         print(f"      Feature matrix: {data.shape[0]} rows × {data.shape[1]} cols")
         print(f"      Stocks with data: {data['code'].nunique()}/{len(codes)}")
     except Exception as e:

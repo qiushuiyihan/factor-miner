@@ -1,6 +1,7 @@
 [
   {
-    "expression": "abs(sub(X63, X18))",
+    "expression": "abs(sub(vol_ma20, mid_net_lag1))",
+    "expression_raw": "abs(sub(X63, X18))",
     "ic": 0.0644,
     "ic_windows": [
       0.0819,
@@ -13,7 +14,8 @@
     "length": 4
   },
   {
-    "expression": "neg(X4)",
+    "expression": "neg(super_net)",
+    "expression_raw": "neg(X4)",
     "ic": -0.0564,
     "ic_windows": [
       -0.0722,
@@ -26,7 +28,8 @@
     "length": 2
   },
   {
-    "expression": "sqrt(mul(X56, X64))",
+    "expression": "sqrt(mul(small_net_accel, vol_breakout))",
+    "expression_raw": "sqrt(mul(X56, X64))",
     "ic": -0.0552,
     "ic_windows": [
       -0.1247,
@@ -39,7 +42,8 @@
     "length": 4
   },
   {
-    "expression": "inv(abs(div(sqrt(X33), sqrt(X53))))",
+    "expression": "inv(abs(div(sqrt(main_net_ma5), sqrt(main_net_accel))))",
+    "expression_raw": "inv(abs(div(sqrt(X33), sqrt(X53))))",
     "ic": -0.0394,
     "ic_windows": [
       0.1203,
@@ -52,7 +56,8 @@
     "length": 7
   },
   {
-    "expression": "neg(inv(abs(sqrt(X55))))",
+    "expression": "neg(inv(abs(sqrt(mid_net_accel))))",
+    "expression_raw": "neg(inv(abs(sqrt(X55))))",
     "ic": 0.0369,
     "ic_windows": [
       -0.0454,
@@ -65,7 +70,8 @@
     "length": 5
   },
   {
-    "expression": "neg(add(div(log(div(X31, X40)), add(sub(X41, X30), mul(X60, X36))), inv(sqrt(abs(X55)))))",
+    "expression": "neg(add(div(log(div(super_net_lag4, large_net_std5)), add(sub(mid_net_ma5, super_net_lag3), mul(retail_vs_main, main_net_std5))), inv(sqrt(abs(mid_net_accel)))))",
+    "expression_raw": "neg(add(div(log(div(X31, X40)), add(sub(X41, X30), mul(X60, X36))), inv(sqrt(abs(X55)))))",
     "ic": 0.0368,
     "ic_windows": [
       0.0233,
