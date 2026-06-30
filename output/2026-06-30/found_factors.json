@@ -1,5 +1,19 @@
 [
   {
+    "expression": "sub(mid_net_lag4, main_net_ma10)",
+    "expression_raw": "sub(X21, X34)",
+    "ic": 0.0868,
+    "ic_windows": [
+      0.1005,
+      0.0422,
+      0.1018
+    ],
+    "ic_mean": 0.0815,
+    "ic_stability": 0.0596,
+    "discovery_date": "2026-06-30",
+    "length": 3
+  },
+  {
     "expression": "abs(sub(vol_ma20, mid_net_lag1))",
     "expression_raw": "abs(sub(X63, X18))",
     "ic": 0.0644,
@@ -14,30 +28,16 @@
     "length": 4
   },
   {
-    "expression": "neg(super_net)",
-    "expression_raw": "neg(X4)",
-    "ic": -0.0564,
+    "expression": "log(neg(neg(small_net_accel)))",
+    "expression_raw": "log(neg(neg(X56)))",
+    "ic": -0.0539,
     "ic_windows": [
-      -0.0722,
-      -0.0669,
-      -0.0462
+      -0.1275,
+      -0.1428,
+      -0.1249
     ],
-    "ic_mean": -0.0618,
-    "ic_stability": 0.026,
-    "discovery_date": "2026-06-30",
-    "length": 2
-  },
-  {
-    "expression": "sqrt(mul(small_net_accel, vol_breakout))",
-    "expression_raw": "sqrt(mul(X56, X64))",
-    "ic": -0.0552,
-    "ic_windows": [
-      -0.1247,
-      -0.1495,
-      -0.1271
-    ],
-    "ic_mean": -0.1338,
-    "ic_stability": 0.0248,
+    "ic_mean": -0.1317,
+    "ic_stability": 0.0179,
     "discovery_date": "2026-06-30",
     "length": 4
   },
@@ -68,19 +68,5 @@
     "ic_stability": 0.0642,
     "discovery_date": "2026-06-30",
     "length": 5
-  },
-  {
-    "expression": "neg(add(div(log(div(super_net_lag4, large_net_std5)), add(sub(mid_net_ma5, super_net_lag3), mul(retail_vs_main, main_net_std5))), inv(sqrt(abs(mid_net_accel)))))",
-    "expression_raw": "neg(add(div(log(div(X31, X40)), add(sub(X41, X30), mul(X60, X36))), inv(sqrt(abs(X55)))))",
-    "ic": 0.0368,
-    "ic_windows": [
-      0.0233,
-      0.0603,
-      0.0201
-    ],
-    "ic_mean": 0.0346,
-    "ic_stability": 0.0401,
-    "discovery_date": "2026-06-30",
-    "length": 18
   }
 ]

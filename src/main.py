@@ -39,18 +39,14 @@ def main():
     try:
         data = build_enriched_matrix(codes, daily_lookback=60, intraday_lookback=10)
 
-        # Fetch tick features and merge into daily matrix
+        # Fetch tick features — per-stock snapshot, merge by code (not date)
         tick = build_tick_features(codes)
         if not tick.empty:
             tick_cols = [c for c in tick.columns if c not in ("date", "code")]
-            data = data.merge(tick[["date", "code"] + tick_cols],
-                              on=["date", "code"], how="left")
-            # Forward-fill tick features (latest tick snapshot applies to future rows)
-            data[tick_cols] = data.groupby("code")[tick_cols].ffill()
-            # Back-fill early rows without tick data
-            data[tick_cols] = data.groupby("code")[tick_cols].bfill()
+            tick_per_stock = tick.drop(columns=["date"]).drop_duplicates(subset="code")
+            data = data.merge(tick_per_stock, on="code", how="left")
             has_tick = data[tick_cols[0]].notna().sum()
-            print(f"      Tick features: {len(tick)} stocks, {has_tick}/{len(data)} rows enriched")
+            print(f"      Tick features: {len(tick_per_stock)} stocks, {has_tick}/{len(data)} rows enriched")
         else:
             print("      Tick features: unavailable")
 
