@@ -108,7 +108,8 @@ def deduplicate(factors, data, max_corr=0.7):
     valid_indices = []
     for i, f in enumerate(factors):
         try:
-            vals = evaluate_expression(f["expression"], data)
+            vals = evaluate_expression(f["expression"], data,
+                                       feature_cols=f.get("feature_cols"))
             factor_vals_list.append(vals)
             valid_indices.append(i)
         except Exception:
