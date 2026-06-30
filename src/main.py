@@ -57,7 +57,7 @@ def main():
     print("\n[3/6] Running genetic programming miner...")
     results = run_evolution(
         data,
-        target_col="forward_main_net_1d",
+        target_col="forward_return_1d",
         n_generations=20,
         population_size=1000,
         random_state=42,
@@ -73,7 +73,7 @@ def main():
     factors = []
     validated = []
     for r in results[:50]:  # validate top 50
-        v = three_layer_validate(r["expression"], data, "forward_main_net_1d")
+        v = three_layer_validate(r["expression"], data, "forward_return_1d")
         if v.get("ic_in_sample", 0) != 0:
             factors.append(r)
             validated.append(v)

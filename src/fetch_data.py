@@ -134,6 +134,63 @@ def fetch_daily_fundflow(code):
     return pd.DataFrame(rows)
 
 
+def fetch_daily_kline_baidu(code, start_time=""):
+    """Fetch daily K-line (OHLCV + MA) from Baidu Finance API.
+
+    Returns DataFrame with columns: date, open, close, high, low, volume, amount.
+    ktype=1 means daily bars. No API key needed, no IP blocking risk.
+    """
+    url = "https://finance.pae.baidu.com/selfselect/getstockquotation"
+    params = {
+        "all": "1", "isIndex": "false", "isBk": "false", "isBlock": "false",
+        "isFutures": "false", "isStock": "true", "newFormat": "1",
+        "group": "quotation_kline_ab", "finClientType": "pc",
+        "code": code, "start_time": start_time, "ktype": "1",
+    }
+    headers = {
+        "User-Agent": UA,
+        "Accept": "application/vnd.finance-web.v1+json",
+        "Origin": "https://gushitong.baidu.com",
+        "Referer": "https://gushitong.baidu.com/",
+    }
+    try:
+        r = requests.get(url, params=params, headers=headers, timeout=10)
+        d = r.json()
+    except Exception as e:
+        print(f"[WARN] Baidu K-line failed for {code}: {e}")
+        return pd.DataFrame()
+
+    result = d.get("Result", {})
+    md = result.get("newMarketData", {})
+    keys = md.get("keys", [])
+    rows_str = md.get("marketData", "")
+
+    if not keys or not rows_str:
+        return pd.DataFrame()
+
+    # Build column index map from keys
+    key_map = {k: i for i, k in enumerate(keys)}
+
+    rows = []
+    for line in rows_str.split(";"):
+        if not line.strip():
+            continue
+        parts = line.split(",")
+        if len(parts) < len(keys):
+            continue
+        rows.append({
+            "date": parts[key_map.get("time", 0)],
+            "open": float(parts[key_map.get("open", 1)]),
+            "close": float(parts[key_map.get("close", 2)]),
+            "high": float(parts[key_map.get("high", 3)]),
+            "low": float(parts[key_map.get("low", 4)]),
+            "volume": float(parts[key_map.get("volume", 5)]),
+            "amount": float(parts[key_map.get("amount", 6)]),
+        })
+
+    return pd.DataFrame(rows)
+
+
 # ── Self-check ──────────────────────────────────────────────
 if __name__ == "__main__":
     code = STOCK_POOL[0]  # 绿的谐波

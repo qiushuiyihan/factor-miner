@@ -2,7 +2,7 @@
 
 import numpy as np
 import pandas as pd
-from fetch_data import fetch_daily_fundflow, fetch_minute_fundflow, STOCK_POOL
+from fetch_data import fetch_daily_fundflow, fetch_minute_fundflow, fetch_daily_kline_baidu, STOCK_POOL
 
 
 def build_daily_matrix(codes=None, lookback_days=60):
@@ -23,13 +23,20 @@ def build_daily_matrix(codes=None, lookback_days=60):
         codes = STOCK_POOL
 
     all_frames = []
+    all_prices = []
     for code in codes:
         df = fetch_daily_fundflow(code)
         if df.empty:
-            print(f"[WARN] no daily data for {code}, skipping")
+            print(f"[WARN] no fund flow data for {code}, skipping")
             continue
         df["code"] = code
         all_frames.append(df)
+
+        # Fetch price K-line for forward return target
+        px = fetch_daily_kline_baidu(code)
+        if not px.empty:
+            px["code"] = code
+            all_prices.append(px)
 
     if not all_frames:
         raise RuntimeError("No data fetched for any stock")
@@ -38,8 +45,19 @@ def build_daily_matrix(codes=None, lookback_days=60):
     raw["date"] = pd.to_datetime(raw["date"])
     raw = raw.sort_values(["code", "date"]).reset_index(drop=True)
 
-    # Forward return: next day's main_net as proxy for price movement signal
-    # (actual forward return requires price data; fund flow delta is the alpha target)
+    # Merge price data
+    if all_prices:
+        prices = pd.concat(all_prices, ignore_index=True)
+        prices["date"] = pd.to_datetime(prices["date"])
+        raw = raw.merge(prices[["date", "code", "close", "volume", "amount"]],
+                        on=["date", "code"], how="left", suffixes=("", "_px"))
+        raw["volume_px"] = raw["volume"]
+        raw["close_px"] = raw["close"]
+        raw = raw.drop(columns=["volume", "close"])  # avoid ambiguity with fund flow cols
+    else:
+        raw["close_px"] = np.nan
+        raw["volume_px"] = np.nan
+
     flow_cols = ["main_net", "large_net", "mid_net", "small_net", "super_net"]
 
     result = raw.copy()
@@ -77,10 +95,23 @@ def build_daily_matrix(codes=None, lookback_days=60):
     result["super_main_ratio"] = result["super_net"] / (result["main_net"].abs() + 1)
     result["retail_vs_main"] = result["small_net"] / (result["main_net"].abs() + 1)
 
-    # Forward return: main_net next day as target (normalized by absolute mean)
-    result["forward_main_net_1d"] = result.groupby("code")["main_net"].shift(-1)
-    result["forward_main_net_5d"] = result.groupby("code")["main_net"].transform(
-        lambda x: x.shift(-5).rolling(5, min_periods=1).mean()
+    # Volume-derived features (from price data)
+    if "volume_px" in result.columns and result["volume_px"].notna().any():
+        result["vol_ma5"] = result.groupby("code")["volume_px"].transform(
+            lambda x: x.rolling(5, min_periods=3).mean()
+        )
+        result["vol_ratio"] = result["volume_px"] / (result["vol_ma5"] + 1)
+        result["vol_ma20"] = result.groupby("code")["volume_px"].transform(
+            lambda x: x.rolling(20, min_periods=10).mean()
+        )
+        result["vol_breakout"] = result["vol_ma5"] / (result["vol_ma20"] + 1)
+
+    # Forward return: next day's close / today's close - 1 (the real alpha target)
+    result["forward_return_1d"] = result.groupby("code")["close_px"].transform(
+        lambda x: x.shift(-1) / x - 1
+    )
+    result["forward_return_5d"] = result.groupby("code")["close_px"].transform(
+        lambda x: (x.shift(-5) / x - 1)
     )
 
     # Drop rows with NaN (first/last few days per stock)

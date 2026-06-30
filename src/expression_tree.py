@@ -26,6 +26,10 @@ FEATURE_COLUMNS = {
         "small_net_ma5", "small_net_ma10", "small_net_ma20", "small_net_std5",
         "super_net_ma5", "super_net_ma10", "super_net_ma20", "super_net_std5",
     ],
+    "PRICE_VOL": [  # price + volume features (from Baidu K-line)
+        "close_px", "volume_px",
+        "vol_ma5", "vol_ratio", "vol_ma20", "vol_breakout",
+    ],
     "DERIVED": [  # computed ratios and accelerations
         "large_main_ratio", "super_main_ratio", "retail_vs_main",
         "main_net_accel", "large_net_accel", "mid_net_accel",
@@ -173,6 +177,21 @@ def generate_expressions(feature_columns, n=200, seed=42):
         for col in intra_cols:
             templates.append((2, lambda c=col: f"zscore({c})"))
             templates.append((2, lambda c=col: f"rank({c})"))
+
+    # Type F: volume-price-flow cross interactions
+    price_cols = feature_columns.get("PRICE_VOL", [])
+    if price_cols:
+        # Volume breakout + fund flow
+        templates.append((4, lambda: "mul(vol_ratio, zscore(main_net))"))
+        templates.append((4, lambda: "div(main_net, add(abs(vol_ma5), 1e-10))"))
+        templates.append((3, lambda: "mul(vol_breakout, rank(main_net))"))
+        templates.append((3, lambda: "div(sub(large_net, small_net), add(abs(volume_px), 1e-10))"))
+        # Price change + fund flow (量价配合)
+        templates.append((4, lambda: "mul(zscore(main_net), zscore(vol_ratio))"))
+        templates.append((3, lambda: "div(main_net_accel, add(abs(vol_ratio), 1e-10))"))
+        for col in price_cols:
+            templates.append((1, lambda c=col: f"zscore({c})"))
+            templates.append((1, lambda c=col: f"rank({c})"))
 
     weights = [w for w, _ in templates]
     total = sum(weights)

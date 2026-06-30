@@ -15,7 +15,7 @@ from expression_tree import evaluate_expression  # noqa: E402
 from genetic_miner import spearman_ic         # noqa: E402
 
 
-def three_layer_validate(expr, data, target_col="forward_main_net_1d", n_windows=3):
+def three_layer_validate(expr, data, target_col="forward_return_1d", n_windows=3):
     """3-layer validation for a factor expression.
 
     L1: In-sample Rank IC on full dataset
@@ -149,7 +149,7 @@ if __name__ == "__main__":
 
     results = []
     for e in exprs[:15]:
-        v = three_layer_validate(e, mat, "forward_main_net_1d")
+        v = three_layer_validate(e, mat, "forward_return_1d")
         if v["ic_in_sample"] != 0:
             results.append({"expression": e, "ic": v["ic_in_sample"]})
         if v["passed"]:

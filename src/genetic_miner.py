@@ -45,7 +45,7 @@ def spearman_ic(a, b):
 
 def run_evolution(
     data,
-    target_col="forward_main_net_1d",
+    target_col="forward_return_1d",
     n_generations=20,
     population_size=1000,
     tournament_size=20,
@@ -70,7 +70,7 @@ def run_evolution(
         sorted by abs(IC) descending
     """
     # Feature columns (exclude metadata and target)
-    exclude = {"date", "code", target_col, "forward_main_net_5d"}
+    exclude = {"date", "code", target_col, "forward_return_5d"}
     feature_cols = [c for c in data.columns if c not in exclude]
 
     if not feature_cols:
@@ -157,7 +157,7 @@ if __name__ == "__main__":
     print("\nRunning evolution (5 generations, small pop)...")
     results = run_evolution(
         mat,
-        target_col="forward_main_net_1d",
+        target_col="forward_return_1d",
         n_generations=5,
         population_size=200,
         random_state=42,
