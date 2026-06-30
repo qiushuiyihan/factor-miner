@@ -1,8 +1,8 @@
-"""Feature matrix builder — align daily fund flow into ML-ready matrix."""
+"""Feature matrix builder — daily + intraday fund flow features."""
 
 import numpy as np
 import pandas as pd
-from fetch_data import fetch_daily_fundflow, STOCK_POOL
+from fetch_data import fetch_daily_fundflow, fetch_minute_fundflow, STOCK_POOL
 
 
 def build_daily_matrix(codes=None, lookback_days=60):
@@ -92,11 +92,164 @@ def build_daily_matrix(codes=None, lookback_days=60):
     return result
 
 
+def build_intraday_features(codes=None, minute_lookback=10):
+    """Extract intraday flow pattern features from minute-level fund flow.
+
+    For each stock-day, computes:
+      - Session-level net flows (morning/afternoon/tail/open)
+      - Intraday volatility and trend of main_net
+      - Large/super order participation ratios
+      - Morning→afternoon reversal signal
+
+    Args:
+        codes: stock list, defaults to STOCK_POOL
+        minute_lookback: number of recent trading days to fetch minute data
+
+    Returns:
+        pd.DataFrame with columns: date, code, <intraday features>
+    """
+    if codes is None:
+        codes = STOCK_POOL
+
+    all_rows = []
+    for code in codes:
+        df = fetch_minute_fundflow(code)
+        if df.empty:
+            print(f"[WARN] no minute data for {code}, skipping intraday")
+            continue
+
+        df["time"] = pd.to_datetime(df["time"])
+        df["date"] = df["time"].dt.date
+        df["hour"] = df["time"].dt.hour + df["time"].dt.minute / 60
+
+        for day, group in df.groupby("date"):
+            if len(group) < 30:  # skip partial days
+                continue
+
+            g = group.sort_values("time")
+            morning = g[g["hour"] < 12.0]
+            afternoon = g[g["hour"] >= 13.0]
+            tail = g[g["hour"] >= 14.5]
+            open30 = g[g["hour"] <= 10.0]
+
+            # Session net flows
+            morning_main = morning["main_net"].sum()
+            afternoon_main = afternoon["main_net"].sum()
+            tail_main = tail["main_net"].sum()
+            open_main = open30["main_net"].sum()
+
+            # Intraday volatility: std of main_net across minutes
+            main_vol = g["main_net"].std() / (g["main_net"].abs().mean() + 1)
+
+            # Intraday trend: slope of cumulative main_net (accumulation vs distribution)
+            cumsum = g["main_net"].cumsum().values
+            x = np.arange(len(cumsum))
+            trend = np.polyfit(x, cumsum, 1)[0] if len(x) > 1 else 0
+            trend_norm = trend / (abs(g["main_net"].mean()) + 1)
+
+            # Reversal: afternoon vs morning sign
+            reversal = 1 if (morning_main < 0 and afternoon_main > 0) else (
+                -1 if (morning_main > 0 and afternoon_main < 0) else 0
+            )
+
+            # Order participation ratios
+            large_ratio = g["large_net"].sum() / (abs(g["main_net"].sum()) + 1)
+            super_ratio = g["super_net"].sum() / (abs(g["main_net"].sum()) + 1)
+            retail_ratio = g["small_net"].sum() / (abs(g["main_net"].sum()) + 1)
+
+            # Tail intensity: tail main_net as fraction of total
+            tail_share = tail_main / (abs(g["main_net"].sum()) + 1)
+
+            # Consecutive positive minutes
+            signs = (g["main_net"].values > 0).astype(int)
+            cons_pos = max(
+                (len(list(g)) for _, g in __import__("itertools").groupby(signs) if _ == 1),
+                default=0
+            )
+
+            all_rows.append({
+                "date": pd.Timestamp(day),
+                "code": code,
+                "intra_morning_main": morning_main,
+                "intra_afternoon_main": afternoon_main,
+                "intra_tail_main": tail_main,
+                "intra_open_main": open_main,
+                "intra_main_vol": main_vol,
+                "intra_main_trend": trend_norm,
+                "intra_reversal": reversal,
+                "intra_large_ratio": large_ratio,
+                "intra_super_ratio": super_ratio,
+                "intra_retail_ratio": retail_ratio,
+                "intra_tail_share": tail_share,
+                "intra_cons_pos_min": cons_pos,
+            })
+
+    if not all_rows:
+        return pd.DataFrame()
+
+    result = pd.DataFrame(all_rows)
+    result = result.sort_values(["code", "date"]).reset_index(drop=True)
+    return result
+
+
+def build_enriched_matrix(codes=None, daily_lookback=60, intraday_lookback=10):
+    """Merge daily features with intraday pattern features.
+
+    When intraday data is available (e.g. today's snapshot), it's merged per-stock.
+    Falls back to daily-only matrix when intraday data doesn't cover the date range
+    (which is normal — minute data is typically only available for the current day).
+
+    Args:
+        codes: stock list
+        daily_lookback: days of daily fund flow history
+        intraday_lookback: passed to build_intraday_features
+
+    Returns:
+        pd.DataFrame — enriched if intraday data available, daily baseline otherwise
+    """
+    print(f"      Building daily matrix ({daily_lookback}d lookback)...")
+    daily = build_daily_matrix(codes, lookback_days=daily_lookback)
+
+    print(f"      Building intraday features...")
+    intra = build_intraday_features(codes, minute_lookback=intraday_lookback)
+
+    if intra.empty:
+        print("      → No intraday data, using daily matrix only")
+        return daily
+
+    # Merge on (date, code)
+    enriched = daily.merge(intra, on=["date", "code"], how="left")
+    intra_cols = [c for c in intra.columns if c not in ("date", "code")]
+
+    # Count rows with intraday data
+    has_intra = enriched[intra_cols[0]].notna().sum() if intra_cols else 0
+    if has_intra == 0:
+        print(f"      → Intraday dates don't overlap with daily (got {len(intra)} intra rows), using daily only")
+        return daily
+
+    # Forward-fill missing intraday features within each stock
+    enriched[intra_cols] = enriched.groupby("code")[intra_cols].ffill()
+
+    print(f"      Enriched matrix: {enriched.shape[0]} rows × {enriched.shape[1]} cols ({has_intra} rows with intraday data)")
+    return enriched
+
+
 # ── Self-check ──────────────────────────────────────────────
 if __name__ == "__main__":
-    mat = build_daily_matrix(["688017", "002896"], lookback_days=30)
-    print(f"Matrix shape: {mat.shape}")
-    print(f"Columns ({len(mat.columns)}): {list(mat.columns)[:15]}...")
+    print("=== Daily matrix ===")
+    mat = build_daily_matrix(["688017", "002896"], lookback_days=20)
+    print(f"Shape: {mat.shape}")
     print(f"Date range: {mat['date'].min()} ~ {mat['date'].max()}")
-    print(f"Stocks: {mat['code'].unique()}")
-    print(mat.head())
+
+    print("\n=== Intraday features ===")
+    intra = build_intraday_features(["688017", "002896"])
+    print(f"Shape: {intra.shape}")
+    if not intra.empty:
+        print(f"Columns: {list(intra.columns)}")
+        print(intra.head(2))
+
+    print("\n=== Enriched matrix ===")
+    enriched = build_enriched_matrix(["688017", "002896"], daily_lookback=20, intraday_lookback=5)
+    print(f"Shape: {enriched.shape}")
+    if not enriched.empty:
+        print(f"Total columns: {len(enriched.columns)}")

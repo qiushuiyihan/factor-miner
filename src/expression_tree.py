@@ -31,6 +31,14 @@ FEATURE_COLUMNS = {
         "main_net_accel", "large_net_accel", "mid_net_accel",
         "small_net_accel", "super_net_accel",
     ],
+    "INTRA": [   # intraday flow pattern features (from minute data)
+        "intra_morning_main", "intra_afternoon_main",
+        "intra_tail_main", "intra_open_main",
+        "intra_main_vol", "intra_main_trend",
+        "intra_reversal", "intra_large_ratio",
+        "intra_super_ratio", "intra_retail_ratio",
+        "intra_tail_share", "intra_cons_pos_min",
+    ],
 }
 
 ALL_COLUMNS = [c for group in FEATURE_COLUMNS.values() for c in group]
@@ -143,6 +151,28 @@ def generate_expressions(feature_columns, n=200, seed=42):
     templates.append((3, lambda: "div(main_net, add(abs(retail_vs_main), 1e-10))"))
     templates.append((3, lambda: "div(sub(large_net, small_net), add(abs(main_net), 1e-10))"))
     templates.append((3, lambda: "div(super_net, add(abs(main_net), 1e-10))"))
+
+    # Type E: intraday flow pattern combinations
+    intra_cols = feature_columns.get("INTRA", [])
+    if intra_cols:
+        # ── Session flow cross-comparisons ──
+        templates.append((4, lambda: "div(sub(intra_afternoon_main, intra_morning_main), add(abs(intra_main_vol), 1e-10))"))
+        templates.append((4, lambda: "div(intra_tail_main, add(abs(intra_open_main), 1e-10))"))
+        templates.append((3, lambda: "mul(intra_reversal, intra_tail_share)"))
+        templates.append((3, lambda: "div(intra_tail_main, add(abs(intra_open_main), 1e-10))"))
+        # ── Intraday volatility interactions ──
+        templates.append((3, lambda: "div(intra_main_trend, add(abs(intra_main_vol), 1e-10))"))
+        templates.append((3, lambda: "mul(intra_cons_pos_min, intra_large_ratio)"))
+        templates.append((2, lambda: "div(sub(intra_large_ratio, intra_retail_ratio), add(abs(intra_main_vol), 1e-10))"))
+        templates.append((2, lambda: "div(intra_super_ratio, add(abs(intra_retail_ratio), 1e-10))"))
+        # ── Intraday vs daily flow interactions ──
+        templates.append((3, lambda: "div(intra_morning_main, add(abs(main_net_lag1), 1e-10))"))
+        templates.append((3, lambda: "div(intra_tail_main, add(abs(main_net_lag1), 1e-10))"))
+        templates.append((2, lambda: "div(intra_main_trend, add(abs(main_net_accel), 1e-10))"))
+        # ── Single-column transforms on intraday features ──
+        for col in intra_cols:
+            templates.append((2, lambda c=col: f"zscore({c})"))
+            templates.append((2, lambda c=col: f"rank({c})"))
 
     weights = [w for w, _ in templates]
     total = sum(weights)

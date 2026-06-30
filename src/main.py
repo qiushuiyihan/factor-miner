@@ -15,7 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fetch_data import STOCK_POOL
-from feature_matrix import build_daily_matrix
+from feature_matrix import build_enriched_matrix, build_intraday_features
 from expression_tree import generate_expressions, FEATURE_COLUMNS, evaluate_expression
 from genetic_miner import run_evolution, spearman_ic
 from validator import three_layer_validate, deduplicate
@@ -35,9 +35,9 @@ def main():
     print(f"{'='*60}\n")
 
     # ── Step 1: Data ────────────────────────────────────────
-    print("[1/6] Fetching daily fund flow data...")
+    print("[1/6] Fetching data (daily + intraday fund flow)...")
     try:
-        data = build_daily_matrix(codes, lookback_days=60)
+        data = build_enriched_matrix(codes, daily_lookback=60, intraday_lookback=10)
         print(f"      Feature matrix: {data.shape[0]} rows × {data.shape[1]} cols")
         print(f"      Stocks with data: {data['code'].nunique()}/{len(codes)}")
     except Exception as e:
@@ -102,8 +102,29 @@ def main():
         deduped_vals = []
         print("      No factors passed validation, nothing to dedup")
 
-    # ── Step 6: LLM interpretation + report ─────────────────
-    print("\n[6/6] LLM interpretation & report generation...")
+    # ── Step 6: Intraday snapshot + LLM ──────────────────────
+    print("\n[6/6] Today's intraday flow snapshot + LLM analysis...")
+
+    # Fetch today's minute-level flow patterns for all stocks
+    intra_today = build_intraday_features(codes)
+    intra_summary = ""
+    if not intra_today.empty:
+        intra_lines = ["## 今日分时资金流快照", ""]
+        intra_lines.append("| 代码 | 早盘主力 | 尾盘主力 | 日内趋势 | 反转信号 | 大单占比 | 连续流入(分钟) |")
+        intra_lines.append("|------|---------|---------|---------|---------|---------|--------------|")
+        for _, row in intra_today.iterrows():
+            trend_sign = "↑吸筹" if row["intra_main_trend"] > 0 else "↓派发"
+            reversal = "是" if row["intra_reversal"] != 0 else "-"
+            intra_lines.append(
+                f"| {row['code']} | {row['intra_morning_main']/1e4:.0f}万 "
+                f"| {row['intra_tail_main']/1e4:.0f}万 "
+                f"| {trend_sign} "
+                f"| {reversal} "
+                f"| {row['intra_large_ratio']:.2f} "
+                f"| {int(row['intra_cons_pos_min'])} |"
+            )
+        intra_summary = "\n".join(intra_lines)
+        print(f"      Intraday snapshot: {len(intra_today)} stocks")
 
     llm_interpretation = ""
     suggestions = ""
@@ -111,11 +132,15 @@ def main():
         llm_interpretation = interpret_factors(deduped, deduped_vals)
         suggestions = suggest_next_round(deduped, methodology)
     elif factors:
-        # Use top factors even if they didn't pass validation
         llm_interpretation = interpret_factors(factors[:5], validated[:5])
         suggestions = suggest_next_round(factors[:5], methodology)
 
-    # Always include all factors (passed + failed) in report for transparency
+    # Append intraday summary to LLM interpretation if available
+    if intra_summary and llm_interpretation:
+        llm_interpretation = intra_summary + "\n\n" + llm_interpretation
+    elif intra_summary:
+        llm_interpretation = intra_summary
+
     report_path = generate_report(
         factors, validated,
         llm_interpretation, methodology, suggestions,
