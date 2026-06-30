@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fetch_data import STOCK_POOL
 from feature_matrix import build_enriched_matrix, build_intraday_features
-from expression_tree import generate_expressions, FEATURE_COLUMNS, evaluate_expression
+from expression_tree import generate_expressions, FEATURE_COLUMNS, evaluate_expression, decode_expression
 from genetic_miner import run_evolution, spearman_ic
 from validator import three_layer_validate, deduplicate
 from llm_layer import search_methodology, interpret_factors, suggest_next_round
@@ -141,6 +141,16 @@ def main():
         llm_interpretation = intra_summary + "\n\n" + llm_interpretation
     elif intra_summary:
         llm_interpretation = intra_summary
+
+    # Decode gplearn X-index expressions to human-readable column names
+    for f in factors:
+        f["expression_decoded"] = decode_expression(
+            f["expression"], f.get("feature_cols")
+        )
+    for d in deduped:
+        d["expression_decoded"] = decode_expression(
+            d["expression"], d.get("feature_cols")
+        )
 
     report_path = generate_report(
         factors, validated,

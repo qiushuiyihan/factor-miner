@@ -46,7 +46,10 @@ def generate_report(factors, validations, llm_interpretation,
         for i, (f, v) in enumerate(passed):
             lines.append(f"### ⠀#{i+1} | IC={f['ic']:.4f}")
             lines.append("")
-            lines.append(f"- **表达式**: `{f['expression']}`")
+            decoded = f.get("expression_decoded", f["expression"])
+            lines.append(f"- **表达式**: `{decoded}`")
+            if decoded != f["expression"]:
+                lines.append(f"- **原始(gplearn)**: `{f['expression']}`")
             lines.append(f"- **复杂度**: {f.get('length', '?')} 节点")
             lines.append(f"- **样本内IC**: {v.get('ic_in_sample', '?')}")
             lines.append(f"- **滚动窗口IC**: {v.get('ic_windows', [])}")
@@ -98,7 +101,8 @@ def generate_report(factors, validations, llm_interpretation,
     pool = []
     for f, v in passed:
         pool.append({
-            "expression": f["expression"],
+            "expression": f.get("expression_decoded", f["expression"]),
+            "expression_raw": f["expression"],
             "ic": f["ic"],
             "ic_windows": v.get("ic_windows", []),
             "ic_mean": v.get("ic_mean", 0),

@@ -47,6 +47,22 @@ FEATURE_COLUMNS = {
 
 ALL_COLUMNS = [c for group in FEATURE_COLUMNS.values() for c in group]
 
+
+def decode_expression(expr, feature_cols=None):
+    """Convert gplearn X-index expression to human-readable column names.
+
+    Example: "add(X0, mul(X3, X5))" → "add(close_px, mul(vol_ratio, main_net))"
+    Falls back to original expression if feature_cols is None.
+    """
+    if not feature_cols:
+        return expr
+    result = expr
+    # Replace in reverse index order to avoid partial matches (X1 vs X10)
+    for i in sorted(range(len(feature_cols)), reverse=True):
+        col = feature_cols[i] if i < len(feature_cols) else f"col{i}"
+        result = result.replace(f"X{i}", col)
+    return result
+
 # ── Safe operators ───────────────────────────────────────────
 def _safe_div(a, b):
     denom = np.where(np.abs(b) < 1e-10, np.sign(b) * 1e-10, b)
