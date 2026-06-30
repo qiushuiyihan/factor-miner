@@ -1,0 +1,8 @@
+mootdx>=0.10
+requests
+pandas
+numpy
+scipy
+stockstats
+gplearn
+openai
