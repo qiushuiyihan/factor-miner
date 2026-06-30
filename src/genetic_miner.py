@@ -139,6 +139,7 @@ def run_evolution(
                 "ic": round(ic, 4),
                 "generation": n_generations,
                 "length": program.length_,
+                "feature_cols": feature_cols,  # X-index → column name mapping
             }
         )
 

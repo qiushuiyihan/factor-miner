@@ -15,7 +15,8 @@ from expression_tree import evaluate_expression  # noqa: E402
 from genetic_miner import spearman_ic         # noqa: E402
 
 
-def three_layer_validate(expr, data, target_col="forward_return_1d", n_windows=3):
+def three_layer_validate(expr, data, target_col="forward_return_1d", n_windows=3,
+                         feature_cols=None):
     """3-layer validation for a factor expression.
 
     L1: In-sample Rank IC on full dataset
@@ -24,10 +25,17 @@ def three_layer_validate(expr, data, target_col="forward_return_1d", n_windows=3
         AND mean IC > 0.03
         AND stability (max_ic - min_ic) < 0.08
 
+    Args:
+        expr: expression string (named-column or gplearn X-index format)
+        data: feature matrix DataFrame
+        target_col: prediction target column name
+        n_windows: number of rolling validation windows
+        feature_cols: list of column names for gplearn X-index mapping
+
     Returns dict with all metrics and pass/fail verdict.
     """
     try:
-        factor_vals = evaluate_expression(expr, data)
+        factor_vals = evaluate_expression(expr, data, feature_cols=feature_cols)
     except Exception as e:
         return {"passed": False, "error": str(e), "ic_in_sample": 0,
                 "ic_windows": [], "ic_mean": 0, "ic_stability": 1.0}

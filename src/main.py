@@ -73,7 +73,8 @@ def main():
     factors = []
     validated = []
     for r in results[:50]:  # validate top 50
-        v = three_layer_validate(r["expression"], data, "forward_return_1d")
+        v = three_layer_validate(r["expression"], data, "forward_return_1d",
+                                 feature_cols=r.get("feature_cols"))
         if v.get("ic_in_sample", 0) != 0:
             factors.append(r)
             validated.append(v)

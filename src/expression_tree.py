@@ -81,21 +81,34 @@ OPERATORS = {
 }
 
 
-def evaluate_expression(expr, data):
+def evaluate_expression(expr, data, feature_cols=None):
     """Evaluate a factor expression string against a feature matrix DataFrame.
 
-    Expression syntax supports:
-      - column references: `main_net`, `large_net_lag3`, etc.
-      - operators: add(), sub(), mul(), div(), abs(), log(), sqrt(),
-                   neg(), inv(), rank(), zscore()
-      - rolling: ts_sum(col, N), ts_mean(col, N), ts_std(col, N)
-      - cross: corr(col1, col2, N)
+    Supports two expression formats:
+      1. Named columns: "div(sub(main_net, main_net_ma5), main_net_std5)"
+      2. gplearn X-indices: "add(X0, mul(X3, X5))" — requires feature_cols list
+         mapping Xi → actual column name.
 
-    Example: "div(sub(main_net, main_net_ma5), main_net_std5)"
-             = (main_net - main_net_ma5) / main_net_std5  (z-score of fund flow)
+    Args:
+        expr: expression string in either format
+        data: pd.DataFrame with feature columns
+        feature_cols: optional list of column names for gplearn X-index mapping
     """
-    # Build a safe eval context
-    context = {c: data[c].values for c in ALL_COLUMNS if c in data.columns}
+    context = {}
+    # Map named columns
+    for c in ALL_COLUMNS:
+        if c in data.columns:
+            context[c] = data[c].values
+    # Map gplearn X-index format (Xi → column value)
+    if feature_cols:
+        for i, col in enumerate(feature_cols):
+            if col in data.columns:
+                context[f"X{i}"] = data[col].values
+    # Also map any column that appears in data but not in ALL_COLUMNS
+    for c in data.columns:
+        if c not in context:
+            context[c] = data[c].values
+
     context.update(OPERATORS)
     context["ts_sum"] = _rolling_sum
     context["ts_mean"] = _rolling_mean
