@@ -1,8 +1,8 @@
-名称: 每日因子挖掘器
+name: Daily Factor Miner
 
 on:
   workflow_dispatch:
-运行计划:
+  schedule:
     - cron: '30 8 * * 1,2,3,4,5'
 
 jobs:
@@ -11,25 +11,25 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - 使用: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - 名称: 设置 Python
-        使用: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          python版本: '3.11'
+          python-version: '3.11'
 
-      - 名称: 安装依赖
-        运行: |
+      - name: Install dependencies
+        run: |
           pip install pandas numpy scipy requests gplearn openai stockstats mootdx
 
-      - 名称: 运行因子矿工
-        环境:
+      - name: Run factor miner
+        env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-        运行: |
+        run: |
           mkdir -p data output
           python src/main.py
 
-      - 使用: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          名称: 因子报告
-          路径: 输出
+          name: factor-report
+          path: output
