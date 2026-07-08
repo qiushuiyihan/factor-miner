@@ -15,7 +15,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fetch_data import STOCK_POOL
-from feature_matrix import build_enriched_matrix, build_intraday_features, build_tick_features
+from feature_matrix import (build_enriched_matrix, build_intraday_features,
+                            build_tick_features, build_price_matrix)
 from expression_tree import generate_expressions, FEATURE_COLUMNS, evaluate_expression, decode_expression
 from genetic_miner import run_evolution, spearman_ic
 from validator import three_layer_validate, deduplicate
@@ -35,26 +36,35 @@ def main():
     print(f"{'='*60}\n")
 
     # ── Step 1: Data ────────────────────────────────────────
-    print("[1/6] Fetching data (daily + tick + intraday)...")
+    print("[1/6] Fetching data...")
+    data = None
     try:
         data = build_enriched_matrix(codes, daily_lookback=60, intraday_lookback=10)
-
-        # Fetch tick features — per-stock snapshot, merge by code (not date)
-        tick = build_tick_features(codes)
-        if not tick.empty:
-            tick_cols = [c for c in tick.columns if c not in ("date", "code")]
-            tick_per_stock = tick.drop(columns=["date"]).drop_duplicates(subset="code")
-            data = data.merge(tick_per_stock, on="code", how="left")
-            has_tick = data[tick_cols[0]].notna().sum()
-            print(f"      Tick features: {len(tick_per_stock)} stocks, {has_tick}/{len(data)} rows enriched")
-        else:
-            print("      Tick features: unavailable")
-
-        print(f"      Feature matrix: {data.shape[0]} rows × {data.shape[1]} cols")
-        print(f"      Stocks with data: {data['code'].nunique()}/{len(codes)}")
+        source = "daily+fundflow"
     except Exception as e:
-        print(f"[FATAL] Data fetch failed: {e}")
-        return 1
+        print(f"      Fund flow unavailable ({e}), falling back to price-only matrix...")
+    if data is None or data.empty:
+        try:
+            data = build_price_matrix(codes, lookback_days=120)
+            source = "price-only"
+        except Exception as e:
+            print(f"[FATAL] All data sources failed: {e}")
+            return 1
+
+    # Fetch tick features — per-stock snapshot, merge by code
+    tick = build_tick_features(codes)
+    if not tick.empty:
+        tick_cols = [c for c in tick.columns if c not in ("date", "code")]
+        tick_per_stock = tick.drop(columns=["date"]).drop_duplicates(subset="code")
+        data = data.merge(tick_per_stock, on="code", how="left")
+        has_tick = data[tick_cols[0]].notna().sum()
+        print(f"      Tick features: {len(tick_per_stock)} stocks, {has_tick}/{len(data)} rows enriched")
+    else:
+        print("      Tick features: unavailable")
+
+    print(f"      Source: {source}")
+    print(f"      Feature matrix: {data.shape[0]} rows × {data.shape[1]} cols")
+    print(f"      Stocks with data: {data['code'].nunique()}/{len(codes)}")
 
     if data.shape[0] < 100:
         print(f"[FATAL] Insufficient data: {data.shape[0]} rows. Need at least 100.")

@@ -363,6 +363,100 @@ def build_tick_features(codes=None):
     return result.sort_values(["code", "date"]).reset_index(drop=True)
 
 
+def build_price_matrix(codes=None, lookback_days=120):
+    """Build a price-only feature matrix from Baidu K-line (no fund flow dependency).
+
+    Falls back when eastmoney is unreachable. Uses 6 years of OHLCV data.
+    Computes price-derived features + forward return target.
+    """
+    if codes is None:
+        codes = STOCK_POOL
+
+    all_frames = []
+    for code in codes:
+        px = fetch_daily_kline_baidu(code)
+        if px.empty:
+            print(f"[WARN] no price data for {code}, skipping")
+            continue
+        px["code"] = code
+        all_frames.append(px)
+
+    if not all_frames:
+        raise RuntimeError("No price data fetched for any stock")
+
+    raw = pd.concat(all_frames, ignore_index=True)
+    raw["date"] = pd.to_datetime(raw["date"])
+    raw = raw.sort_values(["code", "date"]).reset_index(drop=True)
+
+    result = raw.copy()
+
+    # ── Price features ──
+    # Returns
+    result["return_1d"] = result.groupby("code")["close"].pct_change()
+    result["return_1d_lag1"] = result.groupby("code")["return_1d"].shift(1)
+
+    # Amplitude
+    result["amplitude"] = (result["high"] - result["low"]) / (result["close"] + 1e-10)
+
+    # Price position within day
+    result["price_position"] = (result["close"] - result["low"]) / (result["high"] - result["low"] + 1e-10)
+
+    # Gap
+    result["gap"] = result.groupby("code")["open"].transform(
+        lambda x: x / x.shift(1) - 1
+    )
+
+    # Lagged closes
+    for lag in range(1, 6):
+        result[f"close_lag{lag}"] = result.groupby("code")["close"].shift(lag)
+
+    # Moving averages
+    for w in [5, 10, 20, 60]:
+        result[f"close_ma{w}"] = result.groupby("code")["close"].transform(
+            lambda x: x.rolling(w, min_periods=max(3, w//2)).mean()
+        )
+
+    # MA deviations
+    for w in [5, 10, 20]:
+        result[f"close_dev{w}"] = result["close"] / (result[f"close_ma{w}"] + 1e-10) - 1
+
+    # Close std
+    result["close_std20"] = result.groupby("code")["close"].transform(
+        lambda x: x.rolling(20, min_periods=10).std()
+    )
+
+    # ── Volume features ──
+    result["vol_ma5"] = result.groupby("code")["volume"].transform(
+        lambda x: x.rolling(5, min_periods=3).mean()
+    )
+    result["vol_ma20"] = result.groupby("code")["volume"].transform(
+        lambda x: x.rolling(20, min_periods=10).mean()
+    )
+    result["vol_ratio"] = result["volume"] / (result["vol_ma5"] + 1)
+    result["vol_breakout"] = result["vol_ma5"] / (result["vol_ma20"] + 1)
+    result["amount_ma5"] = result.groupby("code")["amount"].transform(
+        lambda x: x.rolling(5, min_periods=3).mean()
+    )
+    result["amount_ratio"] = result["amount"] / (result["amount_ma5"] + 1)
+
+    # Volume-Price interaction
+    result["vp_corr10"] = result.groupby("code").apply(
+        lambda g: g["volume"].rolling(10).corr(g["close"])
+    ).reset_index(level=0, drop=True)
+
+    # ── Forward target ──
+    result["forward_return_1d"] = result.groupby("code")["close"].transform(
+        lambda x: x.shift(-1) / x - 1
+    )
+    result["forward_return_5d"] = result.groupby("code")["close"].transform(
+        lambda x: x.shift(-5) / x - 1
+    )
+
+    result = result.dropna()
+    result = result.groupby("code").tail(lookback_days).reset_index(drop=True)
+    return result
+
+
 # ── Self-check ──────────────────────────────────────────────
 if __name__ == "__main__":
     print("=== Daily matrix ===")

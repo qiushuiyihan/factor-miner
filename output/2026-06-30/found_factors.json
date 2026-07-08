@@ -68,5 +68,33 @@
     "ic_stability": 0.0642,
     "discovery_date": "2026-06-30",
     "length": 5
+  },
+  {
+    "expression": "sqrt(mul(small_net_accel, tick_arrival_rate))",
+    "expression_raw": "sqrt(mul(X56, X71))",
+    "ic": -0.0357,
+    "ic_windows": [
+      -0.132,
+      -0.1364,
+      -0.1305
+    ],
+    "ic_mean": -0.133,
+    "ic_stability": 0.0059,
+    "discovery_date": "2026-06-30",
+    "length": 4
+  },
+  {
+    "expression": "abs(abs(div(div(large_net_ma20, super_net_lag2), div(retail_vs_main, tick_vwap_dev))))",
+    "expression_raw": "abs(abs(div(div(X39, X29), div(X60, X69))))",
+    "ic": 0.0239,
+    "ic_windows": [
+      0.0618,
+      0.0719,
+      0.079
+    ],
+    "ic_mean": 0.0709,
+    "ic_stability": 0.0171,
+    "discovery_date": "2026-06-30",
+    "length": 9
   }
 ]

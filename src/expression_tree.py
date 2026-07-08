@@ -29,6 +29,12 @@ FEATURE_COLUMNS = {
     "PRICE_VOL": [  # price + volume features (from Baidu K-line)
         "close_px", "volume_px",
         "vol_ma5", "vol_ratio", "vol_ma20", "vol_breakout",
+        # pure price features (price-only matrix fallback)
+        "return_1d", "return_1d_lag1", "amplitude", "price_position",
+        "gap", "close_lag1", "close_lag2", "close_lag3", "close_lag4", "close_lag5",
+        "close_ma5", "close_ma10", "close_ma20", "close_ma60",
+        "close_dev5", "close_dev10", "close_dev20", "close_std20",
+        "amount_ma5", "amount_ratio", "vp_corr10",
     ],
     "DERIVED": [  # computed ratios and accelerations
         "large_main_ratio", "super_main_ratio", "retail_vs_main",
