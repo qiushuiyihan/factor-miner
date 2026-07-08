@@ -1,13 +1,12 @@
 名称: 每日因子挖掘器
 
-触发时间:
-运行计划:
-    # 北京时间 16:30（UTC+8）= UTC 08:30，收盘后1.5小时
-    - cron: '30 8 * * 1-5'→ 周一至周五每天08:30执行
+on:
 workflow_dispatch:  # 手动触发
+运行计划:
+    - cron: '30 8 * * 1,2,3,4,5'
 
-作业:
-挖掘:
+jobs:
+  mine:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -17,13 +16,13 @@ workflow_dispatch:  # 手动触发
       - 名称: 设置 Python
         使用: actions/setup-python@v5
         with:
-          Python版本: '3.11'
+          python版本: '3.11'
 
-      - 名称: 安装依赖
+      - 名称: 安装依赖项
         运行: |
           pip install pandas numpy scipy requests gplearn openai stockstats mootdx
 
-      - 名称: 获取百度K线+东方财富数据+逐笔
+      - 名称: 获取百度K线数据+东方财富数据+逐笔行情
         环境:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         运行: |
@@ -31,7 +30,7 @@ workflow_dispatch:  # 手动触发
           python src/main.py
 
       - 名称: 上传报告
-        用途: actions/upload-artifact@v4
+用途: actions/upload-artifact@v4
         with:
           名称: factor-report-${{ github.run_id }}
           路径: output/*/report.md
