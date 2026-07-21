@@ -81,6 +81,9 @@ def fetch_minute_fundflow(code, date=None):
     try:
         r = em_get(url, params=params, headers=headers, timeout=10)
         d = r.json()
+        if not isinstance(d, dict):
+            print(f"[WARN] fund flow returned unexpected type for {code}: {type(d)}")
+            return pd.DataFrame()
     except Exception as e:
         print(f"[WARN] fund flow fetch failed for {code}: {e}")
         return pd.DataFrame()
@@ -115,6 +118,9 @@ def fetch_daily_fundflow(code):
     try:
         r = em_get(url, params=params, headers=headers, timeout=15)
         d = r.json()
+        if not isinstance(d, dict):
+            print(f"[WARN] daily fund flow returned unexpected type for {code}: {type(d)}")
+            return pd.DataFrame()
     except Exception as e:
         print(f"[WARN] daily fund flow fetch failed for {code}: {e}")
         return pd.DataFrame()
@@ -156,6 +162,9 @@ def fetch_daily_kline_baidu(code, start_time=""):
     try:
         r = requests.get(url, params=params, headers=headers, timeout=10)
         d = r.json()
+        if not isinstance(d, dict):
+            print(f"[WARN] Baidu K-line returned unexpected type for {code}: {type(d)}")
+            return pd.DataFrame()
     except Exception as e:
         print(f"[WARN] Baidu K-line failed for {code}: {e}")
         return pd.DataFrame()
@@ -238,6 +247,9 @@ def fetch_minute_kline_eastmoney(code, klt=5, limit=2000):
     try:
         r = em_get(url, params=params, headers=headers, timeout=20)
         d = r.json()
+        if not isinstance(d, dict):
+            print(f"[WARN] Minute K-line returned unexpected type for {code}: {type(d)}")
+            return pd.DataFrame()
     except Exception as e:
         print(f"[WARN] Minute K-line failed for {code}: {e}")
         return pd.DataFrame()
