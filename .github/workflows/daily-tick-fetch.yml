@@ -2,6 +2,11 @@ name: Daily Tick Fetch — 全A股迈锐逐笔数据
 
 on:
   workflow_dispatch:
+    inputs:
+      limit:
+        description: '测试用：限制N只股票（0=全量）'
+        required: false
+        default: '0'
   schedule:
     # 北京时间 16:30 (UTC+8) = UTC 08:30, 收盘后1.5小时
     - cron: '30 8 * * 1-5'
@@ -23,7 +28,7 @@ jobs:
         run: pip install pandas requests openpyxl pyarrow
 
       - name: Fetch all A-share tick data
-        run: python fetch_all_ticks.py
+        run: python fetch_all_ticks.py --limit ${{ github.event.inputs.limit || 0 }}
 
       - name: Upload tick data
         uses: actions/upload-artifact@v4
