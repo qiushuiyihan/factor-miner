@@ -81,26 +81,22 @@ def fetch_minute_fundflow(code, date=None):
     try:
         r = em_get(url, params=params, headers=headers, timeout=10)
         d = r.json()
-        if not isinstance(d, dict):
-            print(f"[WARN] fund flow returned unexpected type for {code}: {type(d)}")
-            return pd.DataFrame()
+        rows = []
+        for line in d.get("data", {}).get("klines", []):
+            parts = line.split(",")
+            if len(parts) >= 6:
+                rows.append({
+                    "time": parts[0],
+                    "main_net": float(parts[1]),
+                    "small_net": float(parts[2]),
+                    "mid_net": float(parts[3]),
+                    "large_net": float(parts[4]),
+                    "super_net": float(parts[5]),
+                })
+        return pd.DataFrame(rows)
     except Exception as e:
         print(f"[WARN] fund flow fetch failed for {code}: {e}")
         return pd.DataFrame()
-
-    rows = []
-    for line in d.get("data", {}).get("klines", []):
-        parts = line.split(",")
-        if len(parts) >= 6:
-            rows.append({
-                "time": parts[0],
-                "main_net": float(parts[1]),
-                "small_net": float(parts[2]),
-                "mid_net": float(parts[3]),
-                "large_net": float(parts[4]),
-                "super_net": float(parts[5]),
-            })
-    return pd.DataFrame(rows)
 
 
 def fetch_daily_fundflow(code):
@@ -118,26 +114,22 @@ def fetch_daily_fundflow(code):
     try:
         r = em_get(url, params=params, headers=headers, timeout=15)
         d = r.json()
-        if not isinstance(d, dict):
-            print(f"[WARN] daily fund flow returned unexpected type for {code}: {type(d)}")
-            return pd.DataFrame()
+        rows = []
+        for line in d.get("data", {}).get("klines", []):
+            parts = line.split(",")
+            if len(parts) >= 7:
+                rows.append({
+                    "date": parts[0],
+                    "main_net": float(parts[1]) if parts[1] != "-" else 0,
+                    "small_net": float(parts[2]) if parts[2] != "-" else 0,
+                    "mid_net": float(parts[3]) if parts[3] != "-" else 0,
+                    "large_net": float(parts[4]) if parts[4] != "-" else 0,
+                    "super_net": float(parts[5]) if parts[5] != "-" else 0,
+                })
+        return pd.DataFrame(rows)
     except Exception as e:
         print(f"[WARN] daily fund flow fetch failed for {code}: {e}")
         return pd.DataFrame()
-
-    rows = []
-    for line in d.get("data", {}).get("klines", []):
-        parts = line.split(",")
-        if len(parts) >= 7:
-            rows.append({
-                "date": parts[0],
-                "main_net": float(parts[1]) if parts[1] != "-" else 0,
-                "small_net": float(parts[2]) if parts[2] != "-" else 0,
-                "mid_net": float(parts[3]) if parts[3] != "-" else 0,
-                "large_net": float(parts[4]) if parts[4] != "-" else 0,
-                "super_net": float(parts[5]) if parts[5] != "-" else 0,
-            })
-    return pd.DataFrame(rows)
 
 
 def fetch_daily_kline_baidu(code, start_time=""):
@@ -162,42 +154,35 @@ def fetch_daily_kline_baidu(code, start_time=""):
     try:
         r = requests.get(url, params=params, headers=headers, timeout=10)
         d = r.json()
-        if not isinstance(d, dict):
-            print(f"[WARN] Baidu K-line returned unexpected type for {code}: {type(d)}")
+        result = d.get("Result", {})
+        md = result.get("newMarketData", {})
+        keys = md.get("keys", [])
+        rows_str = md.get("marketData", "")
+
+        if not keys or not rows_str:
             return pd.DataFrame()
+
+        key_map = {k: i for i, k in enumerate(keys)}
+        rows = []
+        for line in rows_str.split(";"):
+            if not line.strip():
+                continue
+            parts = line.split(",")
+            if len(parts) < len(keys):
+                continue
+            rows.append({
+                "date": parts[key_map.get("time", 0)],
+                "open": float(parts[key_map.get("open", 1)]),
+                "close": float(parts[key_map.get("close", 2)]),
+                "high": float(parts[key_map.get("high", 3)]),
+                "low": float(parts[key_map.get("low", 4)]),
+                "volume": float(parts[key_map.get("volume", 5)]),
+                "amount": float(parts[key_map.get("amount", 6)]),
+            })
+        return pd.DataFrame(rows)
     except Exception as e:
         print(f"[WARN] Baidu K-line failed for {code}: {e}")
         return pd.DataFrame()
-
-    result = d.get("Result", {})
-    md = result.get("newMarketData", {})
-    keys = md.get("keys", [])
-    rows_str = md.get("marketData", "")
-
-    if not keys or not rows_str:
-        return pd.DataFrame()
-
-    # Build column index map from keys
-    key_map = {k: i for i, k in enumerate(keys)}
-
-    rows = []
-    for line in rows_str.split(";"):
-        if not line.strip():
-            continue
-        parts = line.split(",")
-        if len(parts) < len(keys):
-            continue
-        rows.append({
-            "date": parts[key_map.get("time", 0)],
-            "open": float(parts[key_map.get("open", 1)]),
-            "close": float(parts[key_map.get("close", 2)]),
-            "high": float(parts[key_map.get("high", 3)]),
-            "low": float(parts[key_map.get("low", 4)]),
-            "volume": float(parts[key_map.get("volume", 5)]),
-            "amount": float(parts[key_map.get("amount", 6)]),
-        })
-
-    return pd.DataFrame(rows)
 
 
 def fetch_tick_data(code):
@@ -247,27 +232,23 @@ def fetch_minute_kline_eastmoney(code, klt=5, limit=2000):
     try:
         r = em_get(url, params=params, headers=headers, timeout=20)
         d = r.json()
-        if not isinstance(d, dict):
-            print(f"[WARN] Minute K-line returned unexpected type for {code}: {type(d)}")
-            return pd.DataFrame()
+        rows = []
+        for line in d.get("data", {}).get("klines", []):
+            parts = line.split(",")
+            if len(parts) >= 7:
+                rows.append({
+                    "time": parts[0],
+                    "open": float(parts[1]),
+                    "close": float(parts[2]),
+                    "high": float(parts[3]),
+                    "low": float(parts[4]),
+                    "volume": float(parts[5]),
+                    "amount": float(parts[6]),
+                })
+        return pd.DataFrame(rows)
     except Exception as e:
         print(f"[WARN] Minute K-line failed for {code}: {e}")
         return pd.DataFrame()
-
-    rows = []
-    for line in d.get("data", {}).get("klines", []):
-        parts = line.split(",")
-        if len(parts) >= 7:
-            rows.append({
-                "time": parts[0],
-                "open": float(parts[1]),
-                "close": float(parts[2]),
-                "high": float(parts[3]),
-                "low": float(parts[4]),
-                "volume": float(parts[5]),
-                "amount": float(parts[6]),
-            })
-    return pd.DataFrame(rows)
 
 
 # ── Self-check ──────────────────────────────────────────────
