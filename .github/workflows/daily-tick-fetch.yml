@@ -1,0 +1,33 @@
+name: Daily Tick Fetch — 全A股迈锐逐笔数据
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 北京时间 16:30 (UTC+8) = UTC 08:30, 收盘后1.5小时
+    - cron: '30 8 * * 1-5'
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pandas requests openpyxl pyarrow
+
+      - name: Fetch all A-share tick data
+        run: python fetch_all_ticks.py
+
+      - name: Upload tick data
+        uses: actions/upload-artifact@v4
+        with:
+          name: tick-data-${{ github.run_id }}
+          path: output/tick-data-*/
+          retention-days: 90
