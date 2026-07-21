@@ -26,7 +26,8 @@ import requests
 # ── Config ───────────────────────────────────────────────────
 LICENCE = "7DFC8EA6-8F7A-4765-B37D-356EA3F58829"
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
-MAX_WORKERS = 8
+MAX_WORKERS = 2         # free licence can't handle high concurrency
+RATE_LIMIT = 0.5        # seconds between requests per worker (2 req/s total)
 RETRY = 3
 OUTPUT_ROOT = Path(__file__).resolve().parent / "output"
 
@@ -98,6 +99,7 @@ def _fetch_from_eastmoney():
 def fetch_one_tick(code):
     """Fetch tick data for one stock. Returns list of dicts or None."""
     url = f"http://api.mairuiapi.com/hsrl/zbjy/{code}/{LICENCE}"
+    time.sleep(RATE_LIMIT)  # avoid hammering the free API
     for attempt in range(RETRY):
         try:
             r = requests.get(url, timeout=30)
@@ -105,10 +107,15 @@ def fetch_one_tick(code):
                 data = r.json()
                 if isinstance(data, list) and len(data) > 0 and "d" in data[0]:
                     return {"code": code, "ticks": data, "n": len(data)}
+            elif r.status_code == 429:
+                wait = 5 * (attempt + 1)
+                print(f"  [RATE] HTTP 429 for {code}, waiting {wait}s (attempt {attempt+1}/{RETRY})")
+                time.sleep(wait)
+                continue
             return None
-        except Exception as e:
+        except Exception:
             if attempt < RETRY - 1:
-                time.sleep(1)
+                time.sleep(2)
             else:
                 return None
     return None
