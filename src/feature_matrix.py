@@ -440,9 +440,13 @@ def build_price_matrix(codes=None, lookback_days=120):
     result["amount_ratio"] = result["amount"] / (result["amount_ma5"] + 1)
 
     # Volume-Price interaction
-    result["vp_corr10"] = result.groupby("code").apply(
-        lambda g: g["volume"].rolling(10).corr(g["close"])
-    ).reset_index(level=0, drop=True)
+    try:
+        result["vp_corr10"] = result.groupby("code").apply(
+            lambda g: g["volume"].rolling(10).corr(g["close"])
+        ).reset_index(level=0, drop=True)
+    except Exception:
+        # ponytail: groupby+corr can fail with single-stock groups; skip it
+        result["vp_corr10"] = np.nan
 
     # ── Forward target ──
     result["forward_return_1d"] = result.groupby("code")["close"].transform(
