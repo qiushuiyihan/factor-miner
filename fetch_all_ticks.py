@@ -41,34 +41,58 @@ STOCK_LIST_FILE = Path(__file__).resolve().parent / "data" / "stock_list.json"
 
 
 def get_stock_list(force_refresh=False):
-    """Get full A-share stock code list. Cached to disk, refresh on demand."""
+    """Get full A-share stock code list from cached file. Refresh from API on demand."""
     STOCK_LIST_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-    if not force_refresh and STOCK_LIST_FILE.exists():
-        mtime = datetime.fromtimestamp(STOCK_LIST_FILE.stat().st_mtime)
-        if datetime.now() - mtime < timedelta(days=7):
-            with open(STOCK_LIST_FILE) as f:
-                return json.load(f)
+    if force_refresh:
+        # Try multiple sources
+        stocks = _fetch_from_akshare() or _fetch_from_eastmoney()
+        if stocks:
+            with open(STOCK_LIST_FILE, "w") as f:
+                json.dump(stocks, f, ensure_ascii=False)
+            print(f"  Refreshed: {len(stocks)} stocks from API")
+            return stocks
 
-    print(f"Fetching stock list from eastmoney...")
+    if STOCK_LIST_FILE.exists():
+        with open(STOCK_LIST_FILE) as f:
+            stocks = json.load(f)
+        print(f"  Loaded {len(stocks)} stocks from cache")
+        return stocks
+
+    # First run, no cache — must fetch
+    stocks = _fetch_from_akshare() or _fetch_from_eastmoney()
+    if stocks:
+        with open(STOCK_LIST_FILE, "w") as f:
+            json.dump(stocks, f, ensure_ascii=False)
+        print(f"  Fetched {len(stocks)} stocks from API")
+        return stocks
+    raise RuntimeError("Cannot get stock list — no cache and all APIs failed")
+
+
+def _fetch_from_akshare():
+    """Try akshare for stock list."""
     try:
-        r = requests.get(STOCK_LIST_URL, headers={"User-Agent": UA}, timeout=10)
+        import akshare as ak
+        df = ak.stock_info_a_code_name()
+        return [{"code": row["code"], "name": row["name"]} for _, row in df.iterrows()]
+    except Exception as e:
+        print(f"  [WARN] akshare failed: {e}")
+        return None
+
+
+def _fetch_from_eastmoney():
+    """Try eastmoney for stock list."""
+    try:
+        r = requests.get(STOCK_LIST_URL, headers={"User-Agent": UA}, timeout=15)
         data = r.json()["data"]["diff"]
-        stocks = [
+        return [
             {"code": d["f12"], "name": d.get("f14", "")}
             for d in data
             if d["f12"].isdigit() and len(d["f12"]) == 6
         ]
-        with open(STOCK_LIST_FILE, "w") as f:
-            json.dump(stocks, f, ensure_ascii=False)
-        print(f"  Got {len(stocks)} stocks (cached)")
-        return stocks
     except Exception as e:
-        print(f"[WARN] Stock list fetch failed: {e}")
-        if STOCK_LIST_FILE.exists():
-            with open(STOCK_LIST_FILE) as f:
-                return json.load(f)
-        raise  # ponytail: no fallback without cache, first run MUST succeed
+        print(f"  [WARN] eastmoney stock list failed: {e}")
+        return None
 
 
 def fetch_one_tick(code):

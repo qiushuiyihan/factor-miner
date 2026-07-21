@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
-data/
+data/*
+!data/stock_list.json
 output/
 .env
 .superpowers/
