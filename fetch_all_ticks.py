@@ -92,8 +92,11 @@ def fetch_one_tick(code):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--limit", type=int, default=0, help="Limit N stocks (0=all)")
-    parser.add_argument("--workers", type=int, default=MAX_WORKERS)
+    parser.add_argument("--limit", type=int,
+                        default=int(os.environ.get("TICK_FETCH_LIMIT", "0")),
+                        help="Limit N stocks (0=all)")
+    parser.add_argument("--workers", type=int,
+                        default=int(os.environ.get("TICK_FETCH_WORKERS", str(MAX_WORKERS))))
     parser.add_argument("--refresh-stocks", action="store_true")
     args = parser.parse_args()
 
